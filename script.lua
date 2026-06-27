@@ -57,6 +57,9 @@ local noClipEnabled     = false
 local infiniteJumpEnabled = false
 local guiVisible        = true
 local fovCircleVisible  = true
+local tracersEnabled    = false
+local rgbESPEnabled     = false
+local rgbGunEnabled     = false
 
 local FOV_RADIUS     = 120
 local SMOOTH         = 0.15
@@ -68,6 +71,12 @@ local humanoid
 
 local aimKeyCode = Enum.KeyCode.E
 local guiKeyCode = Enum.KeyCode.RightShift
+
+-- ================= RGB STATE =================
+local rgbHue = 0
+local currentESPColor = Color3.fromRGB(255, 255, 255)
+local tracerLines = {}
+local gunGlowHighlights = {}
 
 -- ================= PALETTE =================
 local BG_DEEP    = Color3.fromRGB(12,  12,  18)
@@ -479,6 +488,64 @@ local function makeKeybindRow(panel, labelText, defaultKey, onChanged)
 	end)
 end
 
+-- ================= COLOR PICKER HELPER =================
+local function makeColorPickerRow(panel, labelText, callback)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 30)
+	row.BackgroundColor3 = BG_ITEM
+	row.BorderSizePixel = 0
+	row.Parent = panel
+	applyCorner(row, 6)
+	applyStroke(row, BORDER_CLR, 1)
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(0.55, 0, 1, 0)
+	lbl.Position = UDim2.new(0, 10, 0, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = labelText
+	lbl.TextColor3 = TEXT_WHITE
+	lbl.Font = Enum.Font.GothamSemibold
+	lbl.TextSize = 11
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Parent = row
+
+	local presetColors = {
+		Color3.fromRGB(255,255,255),
+		Color3.fromRGB(255,60,60),
+		Color3.fromRGB(60,255,100),
+		Color3.fromRGB(80,130,255),
+		Color3.fromRGB(255,200,60),
+		Color3.fromRGB(200,60,255),
+	}
+
+	local swatchLayout = Instance.new("Frame")
+	swatchLayout.Size = UDim2.new(0.42, 0, 0, 18)
+	swatchLayout.Position = UDim2.new(0.56, 0, 0.5, -9)
+	swatchLayout.BackgroundTransparency = 1
+	swatchLayout.Parent = row
+
+	local swatchList = Instance.new("UIListLayout")
+	swatchList.FillDirection = Enum.FillDirection.Horizontal
+	swatchList.Padding = UDim.new(0, 3)
+	swatchList.VerticalAlignment = Enum.VerticalAlignment.Center
+	swatchList.Parent = swatchLayout
+
+	for _, col in ipairs(presetColors) do
+		local swatch = Instance.new("TextButton")
+		swatch.Size = UDim2.new(0, 18, 0, 18)
+		swatch.BackgroundColor3 = col
+		swatch.Text = ""
+		swatch.BorderSizePixel = 0
+		swatch.Parent = swatchLayout
+		applyCorner(swatch, 4)
+		local c = col
+		swatch.MouseButton1Click:Connect(function()
+			currentESPColor = c
+			if callback then callback(c) end
+		end)
+	end
+end
+
 -- ================= AIM TAB =================
 local aimPanelFrame = panels["AIM"]
 
@@ -523,7 +590,6 @@ makeSlider(movPanelFrame, "Jump Power", 17, 300, 17, function(v)
 				humanoid.JumpHeight = v / 5
 			end
 		end)
-		-- brute both in case rig is ambiguous
 		pcall(function() humanoid.JumpPower = v end)
 		pcall(function() humanoid.JumpHeight = v / 5 end)
 	end
@@ -602,6 +668,29 @@ makeToggle(espPanelFrame, "Box ESP (Fill)", false, function(v)
 	end
 end)
 
+makeSectionLabel(espPanelFrame, "TRACERS")
+makeToggle(espPanelFrame, "Tracers", false, function(v)
+	tracersEnabled = v
+	if not v then
+		for _, line in pairs(tracerLines) do
+			if line then
+				pcall(function() line:Remove() end)
+			end
+		end
+		tracerLines = {}
+	end
+end)
+
+makeSectionLabel(espPanelFrame, "ESP COLOR")
+makeColorPickerRow(espPanelFrame, "ESP Color", function(col)
+	currentESPColor = col
+end)
+
+makeSectionLabel(espPanelFrame, "RGB")
+makeToggle(espPanelFrame, "RGB Mode (Rainbow)", false, function(v)
+	rgbESPEnabled = v
+end)
+
 makeSectionLabel(espPanelFrame, "DISPLAY")
 makeToggle(espPanelFrame, "Show FOV Circle", true, function(v)
 	fovCircleVisible = v
@@ -614,6 +703,17 @@ local miscPanelFrame = panels["MISC"]
 makeSectionLabel(miscPanelFrame, "KEYBINDS")
 makeKeybindRow(miscPanelFrame, "Toggle GUI", "RightShift", function(kc)
 	guiKeyCode = kc
+end)
+
+makeSectionLabel(miscPanelFrame, "GUN COSMETICS")
+makeToggle(miscPanelFrame, "RGB Gun Glow (Arsenal)", false, function(v)
+	rgbGunEnabled = v
+	if not v then
+		for _, h in pairs(gunGlowHighlights) do
+			if h and h.Parent then h:Destroy() end
+		end
+		gunGlowHighlights = {}
+	end
 end)
 
 makeSectionLabel(miscPanelFrame, "INFO")
@@ -649,7 +749,7 @@ local function addHighlight(char)
 	h.FillTransparency = 1
 	h.OutlineTransparency = 0
 	h.FillColor    = Color3.fromRGB(255, 60, 60)
-	h.OutlineColor = Color3.fromRGB(255, 255, 255)
+	h.OutlineColor = currentESPColor
 	h.Parent = char
 end
 
@@ -803,12 +903,200 @@ RunService.Heartbeat:Connect(function()
 	end)
 end)
 
+-- ================= RGB CYCLE UTILITY =================
+local function hsvToColor3(h, s, v)
+	return Color3.fromHSV(h, s, v)
+end
+
+-- ================= TRACER SYSTEM =================
+-- Pool of Drawing lines, one per enemy player slot
+local function getOrCreateTracerLine(key)
+	if not tracerLines[key] then
+		local line = Drawing.new("Line")
+		line.Thickness = 1.5
+		line.Color = currentESPColor
+		line.Transparency = 0.15
+		line.Visible = false
+		tracerLines[key] = line
+	end
+	return tracerLines[key]
+end
+
+local function clearTracerForKey(key)
+	if tracerLines[key] then
+		pcall(function() tracerLines[key]:Remove() end)
+		tracerLines[key] = nil
+	end
+end
+
+-- ================= GUN GLOW SYSTEM =================
+local GUN_GLOW_COLOR = Color3.fromRGB(255, 60, 255)
+
+local function isWeaponModel(obj)
+	-- Arsenal stores guns/knives as Tool descendants in the character or workspace
+	-- We try to match common Arsenal model naming patterns
+	if obj:IsA("Tool") then return true end
+	if obj:IsA("Model") and (
+		obj.Name:lower():find("gun") or
+		obj.Name:lower():find("knife") or
+		obj.Name:lower():find("blade") or
+		obj.Name:lower():find("sword") or
+		obj.Name:lower():find("pistol") or
+		obj.Name:lower():find("rifle") or
+		obj.Name:lower():find("shotgun") or
+		obj.Name:lower():find("sniper") or
+		obj.Name:lower():find("smg") or
+		obj.Name:lower():find("melee") or
+		obj.Name:lower():find("bat") or
+		obj.Name:lower():find("axe")
+	) then return true end
+	return false
+end
+
+local function applyGunGlow(model, color)
+	-- Tag it so we don't double-apply
+	if model:FindFirstChild("_GunGlowHL") then return end
+	local h = Instance.new("Highlight")
+	h.Name = "_GunGlowHL"
+	h.FillColor = color
+	h.OutlineColor = color
+	h.FillTransparency = 0.4
+	h.OutlineTransparency = 0
+	h.Parent = model
+	table.insert(gunGlowHighlights, h)
+end
+
+local function removeGunGlow(model)
+	local h = model:FindFirstChild("_GunGlowHL")
+	if h then h:Destroy() end
+end
+
+local function scanAndApplyGunGlow(color)
+	-- Scan local character backpack and equipped tools
+	if player.Character then
+		for _, obj in ipairs(player.Character:GetChildren()) do
+			if isWeaponModel(obj) then
+				applyGunGlow(obj, color)
+			end
+		end
+	end
+	local backpack = player:FindFirstChild("Backpack")
+	if backpack then
+		for _, obj in ipairs(backpack:GetChildren()) do
+			if isWeaponModel(obj) then
+				applyGunGlow(obj, color)
+			end
+		end
+	end
+end
+
+local function clearAllGunGlow()
+	for _, h in pairs(gunGlowHighlights) do
+		if h and h.Parent then
+			pcall(function() h:Destroy() end)
+		end
+	end
+	gunGlowHighlights = {}
+end
+
+-- Watch for new tools being equipped/added
+player.CharacterAdded:Connect(function(char)
+	char.ChildAdded:Connect(function(child)
+		if rgbGunEnabled and isWeaponModel(child) then
+			task.wait(0.1)
+			applyGunGlow(child, GUN_GLOW_COLOR)
+		end
+	end)
+end)
+
+-- Also watch backpack
+local function watchBackpack()
+	local bp = player:WaitForChild("Backpack")
+	bp.ChildAdded:Connect(function(child)
+		if rgbGunEnabled and isWeaponModel(child) then
+			task.wait(0.1)
+			applyGunGlow(child, GUN_GLOW_COLOR)
+		end
+	end)
+end
+task.spawn(watchBackpack)
+
 -- ================= RENDER LOOP =================
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(dt)
+	-- ---- RGB HUE CYCLE ----
+	rgbHue = (rgbHue + dt * 0.12) % 1
+	local rgbColor = hsvToColor3(rgbHue, 1, 1)
+
+	-- ---- RESOLVE ACTIVE ESP COLOR ----
+	local activeColor = rgbESPEnabled and rgbColor or currentESPColor
+
+	-- ---- FOV CIRCLE ----
 	fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 	fovCircle.Radius   = FOV_RADIUS
+	fovCircle.Color    = activeColor
 	fovCircle.Visible  = fovCircleVisible
 
+	-- ---- SCREEN BOTTOM CENTER (tracer origin) ----
+	local screenW = camera.ViewportSize.X
+	local screenH = camera.ViewportSize.Y
+	local tracerOrigin = Vector2.new(screenW / 2, screenH)
+
+	-- ---- PER-PLAYER LOOP ----
+	for _, p in pairs(Players:GetPlayers()) do
+		if p == player then continue end
+
+		local char = p.Character
+		local tracerKey = tostring(p.UserId)
+
+		-- Update highlight color if ESP is on
+		if espEnabled and isEnemy(p) and char then
+			local h = char:FindFirstChild("EnemyHighlight")
+			if h then
+				h.OutlineColor = activeColor
+			end
+		end
+
+		-- Tracer logic
+		if tracersEnabled and isEnemy(p) and char then
+			local root = char:FindFirstChild("HumanoidRootPart")
+			if root then
+				local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+				local line = getOrCreateTracerLine(tracerKey)
+				if onScreen then
+					line.From = tracerOrigin
+					line.To   = Vector2.new(screenPos.X, screenPos.Y)
+					line.Color = activeColor
+					line.Visible = true
+				else
+					line.Visible = false
+				end
+			else
+				local line = tracerLines[tracerKey]
+				if line then line.Visible = false end
+			end
+		else
+			local line = tracerLines[tracerKey]
+			if line then line.Visible = false end
+		end
+	end
+
+	-- ---- GUN GLOW RGB UPDATE ----
+	if rgbGunEnabled then
+		GUN_GLOW_COLOR = rgbColor
+		-- Refresh existing highlights with current color
+		for _, h in pairs(gunGlowHighlights) do
+			if h and h.Parent then
+				h.FillColor = rgbColor
+				h.OutlineColor = rgbColor
+			end
+		end
+		-- Keep scanning in case new tools appeared
+		scanAndApplyGunGlow(rgbColor)
+	else
+		-- If gun glow toggled off, handled in toggle callback; just skip
+	end
+
+	-- ---- AIMBOT ----
 	if not aimEnabled then return end
 	local target = getClosestInFOV()
 	if not target then return end
