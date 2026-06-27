@@ -1,10 +1,26 @@
+--[[
+    ================================================================
+    [ SCRIPT INFORMATION ]
+    Project: Custom Script
+    Author: OYB
+    YouTube: https://www.youtube.com/channel/UCAlXXV1Hbvf7WbfXARuVtiQ
+    
+    [ TERMS AND CONDITIONS ]
+    - You ARE allowed to use and modify this script for your own games.
+    - You ARE NOT allowed to re-upload, redistribute, or claim 
+      ownership of this script.
+    - Removing or altering these credits is strictly prohibited.
+    
+    Copyright (c) 2026 OYB. All rights reserved.
+    ================================================================
+]]
 local Config = {
     -- [1] PlatoBoost Settings
     ServiceId       = 27006, -- Your PlatoBoost Service ID
     PlatoSecret     = "46c8571c-2e96-4cb2-94ca-edb15a0f827c", -- Your PlatoBoost Secret Key
 
     -- [2] Anti-Bypass / Global Secret Variable
-    Secret          = "1234567890", -- This makes the script ONLY run from the key script. Even if they copy the original obfuscated script to bypass the key, they won't be able to!
+    Secret          = "1234", -- This makes the script ONLY run from the key script. Even if they copy the original obfuscated script to bypass the key, they won't be able to!
     
     -- [3] Scripts & Links
     MainScriptURL   = "https://raw.githubusercontent.com/Hoboscipts/Silence/refs/heads/main/script.lua", -- The raw URL of your main script
@@ -23,12 +39,12 @@ local Config = {
     KeyFileName     = "Mykey.txt", -- The name of the file where the valid key will be saved for auto-login
 
     -- [6] GUI Management
-    OldGuiName      = "Silence", -- Name of the old GUI to destroy if it's already open
-    MainGuiName     = "Silence", -- Name of the main script's GUI to check if it's already executing
+    OldGuiName      = "anything", -- Name of the old GUI to destroy if it's already open
+    MainGuiName     = "anything", -- Name of the main script's GUI to check if it's already executing
 
     -- [7] Hub Information & UI Text
     HubName         = "Silence Hub", -- The main title shown at the top of the GUI
-    HubDescription  = "Silence" -- The text shown below the title
+    HubDescription  = "Get a key to use Silence Hub" -- The text shown below the title
 }
 
 -------------------------------------------------------------------------------
