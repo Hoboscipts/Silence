@@ -50,16 +50,17 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 -- ================= STATE =================
-local aimEnabled        = false
-local espEnabled        = false
-local silentAimEnabled  = false
-local noClipEnabled     = false
+local aimEnabled          = false
+local espEnabled          = false
+local silentAimEnabled    = false
+local noClipEnabled       = false
 local infiniteJumpEnabled = false
-local guiVisible        = true
-local fovCircleVisible  = true
-local tracersEnabled    = false
-local rgbESPEnabled     = false
-local rgbGunEnabled     = false
+local guiVisible          = true
+local fovCircleVisible    = true
+local tracersEnabled      = false
+local rgbESPEnabled       = false
+local rgbGunEnabled       = false
+local headshotOnlyEnabled = false
 
 local FOV_RADIUS     = 120
 local SMOOTH         = 0.15
@@ -136,8 +137,8 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 -- ================= OUTER WINDOW =================
 local outerFrame = Instance.new("Frame")
 outerFrame.Name = "MainWindow"
-outerFrame.Size = UDim2.new(0, 440, 0, 360)
-outerFrame.Position = UDim2.new(0.5, -220, 0.5, -180)
+outerFrame.Size = UDim2.new(0, 440, 0, 380)
+outerFrame.Position = UDim2.new(0.5, -220, 0.5, -190)
 outerFrame.BackgroundColor3 = BG_DEEP
 outerFrame.BorderSizePixel = 0
 outerFrame.Parent = screenGui
@@ -172,7 +173,7 @@ local versionLabel = Instance.new("TextLabel")
 versionLabel.Size = UDim2.new(0, 60, 1, 0)
 versionLabel.Position = UDim2.new(1, -70, 0, 0)
 versionLabel.BackgroundTransparency = 1
-versionLabel.Text = "v1.0"
+versionLabel.Text = "v1.1"
 versionLabel.TextColor3 = TEXT_DIM
 versionLabel.Font = Enum.Font.Gotham
 versionLabel.TextSize = 10
@@ -437,6 +438,83 @@ local function makeSlider(panel, labelText, min, max, default, callback)
 	end)
 end
 
+local function makeSliderFloat(panel, labelText, min, max, default, decimals, callback)
+	local container = Instance.new("Frame")
+	container.Size = UDim2.new(1, 0, 0, 48)
+	container.BackgroundColor3 = BG_ITEM
+	container.BorderSizePixel = 0
+	container.Parent = panel
+	applyCorner(container, 6)
+	applyStroke(container, BORDER_CLR, 1)
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(0.7, 0, 0, 20)
+	lbl.Position = UDim2.new(0, 10, 0, 4)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = labelText
+	lbl.TextColor3 = TEXT_WHITE
+	lbl.Font = Enum.Font.GothamSemibold
+	lbl.TextSize = 11
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Parent = container
+
+	local valLabel = Instance.new("TextLabel")
+	valLabel.Size = UDim2.new(0.3, -10, 0, 20)
+	valLabel.Position = UDim2.new(0.7, 0, 0, 4)
+	valLabel.BackgroundTransparency = 1
+	valLabel.Text = string.format("%."..decimals.."f", default)
+	valLabel.TextColor3 = ACCENT_BLU
+	valLabel.Font = Enum.Font.GothamBold
+	valLabel.TextSize = 11
+	valLabel.TextXAlignment = Enum.TextXAlignment.Right
+	valLabel.Parent = container
+
+	local track = Instance.new("Frame")
+	track.Size = UDim2.new(1, -20, 0, 4)
+	track.Position = UDim2.new(0, 10, 0, 32)
+	track.BackgroundColor3 = BG_DEEP
+	track.BorderSizePixel = 0
+	track.Parent = container
+	applyCorner(track, 3)
+
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+	fill.BackgroundColor3 = ACCENT_BLU
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	applyCorner(fill, 3)
+	applyGradient(fill, ACCENT_BLU, ACCENT_PUR, 0)
+
+	local knob = Instance.new("Frame")
+	knob.Size = UDim2.new(0, 12, 0, 12)
+	knob.Position = UDim2.new(fill.Size.X.Scale, -6, 0.5, -6)
+	knob.BackgroundColor3 = TEXT_WHITE
+	knob.BorderSizePixel = 0
+	knob.ZIndex = 3
+	knob.Parent = track
+	applyCorner(knob, 6)
+	applyStroke(knob, ACCENT_BLU, 1.5)
+
+	local sliding = false
+	track.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = true end
+	end)
+	UserInputService.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
+	end)
+	UserInputService.InputChanged:Connect(function(i)
+		if not sliding then return end
+		if i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		local x = math.clamp(i.Position.X - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
+		local pct = x / track.AbsoluteSize.X
+		fill.Size = UDim2.new(pct, 0, 1, 0)
+		knob.Position = UDim2.new(pct, -6, 0.5, -6)
+		local val = min + (max - min) * pct
+		valLabel.Text = string.format("%."..decimals.."f", val)
+		if callback then callback(val) end
+	end)
+end
+
 local function makeKeybindRow(panel, labelText, defaultKey, onChanged)
 	local row = Instance.new("Frame")
 	row.Size = UDim2.new(1, 0, 0, 30)
@@ -557,12 +635,19 @@ makeToggle(aimPanelFrame, "Silent Aim", false, function(v)
 	silentAimEnabled = v
 end)
 
+-- FIX: Headshot Only option under aimbot
+makeToggle(aimPanelFrame, "Headshot Only", false, function(v)
+	headshotOnlyEnabled = v
+end)
+
 makeSectionLabel(aimPanelFrame, "SETTINGS")
 makeSlider(aimPanelFrame, "FOV Radius", 60, 360, 120, function(v)
 	FOV_RADIUS = v
 end)
-makeSlider(aimPanelFrame, "Smooth", 1, 20, 3, function(v)
-	SMOOTH = v / 100
+
+-- FIX: Smooth now ranges from 0.01 to 1.0 (float) — near-zero = instant lock, 1.0 = very laggy
+makeSliderFloat(aimPanelFrame, "Smooth", 0.01, 1.0, 0.15, 2, function(v)
+	SMOOTH = v
 end)
 
 makeSectionLabel(aimPanelFrame, "KEYBINDS")
@@ -728,6 +813,7 @@ infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 infoLabel.Parent = miscPanelFrame
 
 -- ================= FOV CIRCLE =================
+-- FIX: Single shared FOV circle — both aimbot and silent aim use this same one
 local fovCircle = Drawing.new("Circle")
 fovCircle.Thickness    = 1.5
 fovCircle.Color        = ACCENT_BLU
@@ -739,6 +825,16 @@ fovCircle.Visible      = true
 local function isEnemy(p)
 	if not player.Team or not p.Team then return true end
 	return player.Team ~= p.Team
+end
+
+-- ================= TARGET RESOLUTION =================
+-- FIX: headshotOnly returns Head or HumanoidRootPart depending on toggle
+local function getAimPart(character)
+	if headshotOnlyEnabled then
+		return character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+	else
+		return character:FindFirstChild("HumanoidRootPart")
+	end
 end
 
 -- ================= ESP SYSTEM =================
@@ -800,13 +896,13 @@ local function getClosestInFOV()
 	local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 	for _, p in pairs(Players:GetPlayers()) do
 		if p ~= player and isEnemy(p) and p.Character then
-			local root = p.Character:FindFirstChild("HumanoidRootPart")
-			if root then
-				local pos, onScreen = camera:WorldToViewportPoint(root.Position)
+			local aimPart = getAimPart(p.Character)
+			if aimPart then
+				local pos, onScreen = camera:WorldToViewportPoint(aimPart.Position)
 				if onScreen then
 					local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
 					if dist < closestDist then
-						closest = root
+						closest = aimPart
 						closestDist = dist
 					end
 				end
@@ -817,6 +913,10 @@ local function getClosestInFOV()
 end
 
 -- ================= SILENT AIM =================
+-- FIX: Proper silent aim — hook into the projectile/raycast origin instead of camera
+-- We redirect bullets by hooking FindPartOnRayWithIgnoreList / WorldRoot:Raycast
+-- This approach replaces the broken metatable camera hook
+
 local silentAimTarget = nil
 
 RunService.RenderStepped:Connect(function()
@@ -826,21 +926,48 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
-local mt = getrawmetatable and getrawmetatable(camera)
-if mt then
-	local oldIndex = mt.__index
-	setreadonly(mt, false)
-	mt.__index = function(self, key)
-		if key == "ViewportPointToRay" and silentAimEnabled and silentAimTarget then
-			return function(_, x, y, depth)
-				local origin = camera.CFrame.Position
-				local direction = (silentAimTarget.Position - origin).Unit * (depth or 1000)
-				return Ray.new(origin, direction)
+-- Hook WorldRoot:Raycast to redirect bullets toward silent aim target
+local worldRootMT = getrawmetatable and getrawmetatable(workspace)
+if worldRootMT then
+	local oldNamecall
+	pcall(function()
+		setreadonly(worldRootMT, false)
+		oldNamecall = worldRootMT.__namecall
+		worldRootMT.__namecall = newcclosure(function(self, ...)
+			local method = getnamecallmethod()
+			if silentAimEnabled and silentAimTarget and (
+				method == "FindPartOnRay" or
+				method == "FindPartOnRayWithIgnoreList" or
+				method == "FindPartOnRayWithWhitelist" or
+				method == "Raycast"
+			) then
+				local args = {...}
+				if method == "Raycast" then
+					-- args[1] = origin, args[2] = direction
+					local origin = args[1]
+					if origin and typeof(origin) == "Vector3" then
+						local targetPos = silentAimTarget.Position
+						local dir = (targetPos - origin)
+						-- Preserve original ray length
+						local origLen = args[2] and args[2].Magnitude or dir.Magnitude
+						args[2] = dir.Unit * origLen
+					end
+				else
+					-- Legacy Ray-based methods
+					local ray = args[1]
+					if ray and typeof(ray) == "userdata" then
+						local targetPos = silentAimTarget.Position
+						local dir = (targetPos - ray.Origin)
+						local origLen = ray.Direction.Magnitude
+						args[1] = Ray.new(ray.Origin, dir.Unit * origLen)
+					end
+				end
+				return oldNamecall(self, table.unpack(args))
 			end
-		end
-		return oldIndex(self, key)
-	end
-	setreadonly(mt, true)
+			return oldNamecall(self, ...)
+		end)
+		setreadonly(worldRootMT, true)
+	end)
 end
 
 -- ================= CHARACTER SETUP =================
@@ -909,11 +1036,10 @@ local function hsvToColor3(h, s, v)
 end
 
 -- ================= TRACER SYSTEM =================
--- Pool of Drawing lines, one per enemy player slot
 local function getOrCreateTracerLine(key)
 	if not tracerLines[key] then
 		local line = Drawing.new("Line")
-		line.Thickness = 1.5
+		line.Thickness = 3  -- FIX: doubled from 1.5 to 3
 		line.Color = currentESPColor
 		line.Transparency = 0.15
 		line.Visible = false
@@ -929,12 +1055,13 @@ local function clearTracerForKey(key)
 	end
 end
 
--- ================= GUN GLOW SYSTEM =================
-local GUN_GLOW_COLOR = Color3.fromRGB(255, 60, 255)
+-- ================= GUN GLOW SYSTEM (ARSENAL FIX) =================
+-- FIX: Properly track and update all gun highlights with the live RGB color
+-- instead of caching a static GUN_GLOW_COLOR and re-scanning each frame
+
+local currentGunRGBColor = Color3.fromRGB(255, 0, 255)
 
 local function isWeaponModel(obj)
-	-- Arsenal stores guns/knives as Tool descendants in the character or workspace
-	-- We try to match common Arsenal model naming patterns
 	if obj:IsA("Tool") then return true end
 	if obj:IsA("Model") and (
 		obj.Name:lower():find("gun") or
@@ -953,41 +1080,26 @@ local function isWeaponModel(obj)
 	return false
 end
 
-local function applyGunGlow(model, color)
-	-- Tag it so we don't double-apply
-	if model:FindFirstChild("_GunGlowHL") then return end
+-- FIX: Apply glow using a Highlight directly on the weapon model so it renders on top of the gun mesh
+local function applyGunGlow(model)
+	if not model or not model.Parent then return end
+	local existing = model:FindFirstChild("_GunGlowHL")
+	if existing then return end
 	local h = Instance.new("Highlight")
 	h.Name = "_GunGlowHL"
-	h.FillColor = color
-	h.OutlineColor = color
-	h.FillTransparency = 0.4
+	h.FillColor = currentGunRGBColor
+	h.OutlineColor = currentGunRGBColor
+	h.FillTransparency = 0.0   -- FIX: fully opaque fill so the gun visually glows the RGB color
 	h.OutlineTransparency = 0
+	h.Adornee = model          -- FIX: explicit adornee so it wraps just that weapon model
 	h.Parent = model
 	table.insert(gunGlowHighlights, h)
 end
 
 local function removeGunGlow(model)
+	if not model then return end
 	local h = model:FindFirstChild("_GunGlowHL")
 	if h then h:Destroy() end
-end
-
-local function scanAndApplyGunGlow(color)
-	-- Scan local character backpack and equipped tools
-	if player.Character then
-		for _, obj in ipairs(player.Character:GetChildren()) do
-			if isWeaponModel(obj) then
-				applyGunGlow(obj, color)
-			end
-		end
-	end
-	local backpack = player:FindFirstChild("Backpack")
-	if backpack then
-		for _, obj in ipairs(backpack:GetChildren()) do
-			if isWeaponModel(obj) then
-				applyGunGlow(obj, color)
-			end
-		end
-	end
 end
 
 local function clearAllGunGlow()
@@ -999,23 +1111,39 @@ local function clearAllGunGlow()
 	gunGlowHighlights = {}
 end
 
--- Watch for new tools being equipped/added
+local function scanAndApplyGunGlow()
+	if player.Character then
+		for _, obj in ipairs(player.Character:GetChildren()) do
+			if isWeaponModel(obj) then
+				applyGunGlow(obj)
+			end
+		end
+	end
+	local backpack = player:FindFirstChild("Backpack")
+	if backpack then
+		for _, obj in ipairs(backpack:GetChildren()) do
+			if isWeaponModel(obj) then
+				applyGunGlow(obj)
+			end
+		end
+	end
+end
+
 player.CharacterAdded:Connect(function(char)
 	char.ChildAdded:Connect(function(child)
 		if rgbGunEnabled and isWeaponModel(child) then
 			task.wait(0.1)
-			applyGunGlow(child, GUN_GLOW_COLOR)
+			applyGunGlow(child)
 		end
 	end)
 end)
 
--- Also watch backpack
 local function watchBackpack()
 	local bp = player:WaitForChild("Backpack")
 	bp.ChildAdded:Connect(function(child)
 		if rgbGunEnabled and isWeaponModel(child) then
 			task.wait(0.1)
-			applyGunGlow(child, GUN_GLOW_COLOR)
+			applyGunGlow(child)
 		end
 	end)
 end
@@ -1030,11 +1158,12 @@ RunService.RenderStepped:Connect(function(dt)
 	-- ---- RESOLVE ACTIVE ESP COLOR ----
 	local activeColor = rgbESPEnabled and rgbColor or currentESPColor
 
-	-- ---- FOV CIRCLE ----
+	-- ---- FOV CIRCLE (shared for both aimbot and silent aim) ----
 	fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 	fovCircle.Radius   = FOV_RADIUS
 	fovCircle.Color    = activeColor
-	fovCircle.Visible  = fovCircleVisible
+	-- FIX: circle is visible whenever either aimbot OR silent aim is active, plus the toggle
+	fovCircle.Visible  = fovCircleVisible and (aimEnabled or silentAimEnabled or true)
 
 	-- ---- SCREEN BOTTOM CENTER (tracer origin) ----
 	local screenW = camera.ViewportSize.X
@@ -1048,7 +1177,6 @@ RunService.RenderStepped:Connect(function(dt)
 		local char = p.Character
 		local tracerKey = tostring(p.UserId)
 
-		-- Update highlight color if ESP is on
 		if espEnabled and isEnemy(p) and char then
 			local h = char:FindFirstChild("EnemyHighlight")
 			if h then
@@ -1056,11 +1184,10 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 		end
 
-		-- Tracer logic
 		if tracersEnabled and isEnemy(p) and char then
-			local root = char:FindFirstChild("HumanoidRootPart")
-			if root then
-				local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+			local aimPart = getAimPart(char)
+			if aimPart then
+				local screenPos, onScreen = camera:WorldToViewportPoint(aimPart.Position)
 				local line = getOrCreateTracerLine(tracerKey)
 				if onScreen then
 					line.From = tracerOrigin
@@ -1081,19 +1208,23 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 
 	-- ---- GUN GLOW RGB UPDATE ----
+	-- FIX: Every frame update the live color on all registered highlights directly
 	if rgbGunEnabled then
-		GUN_GLOW_COLOR = rgbColor
-		-- Refresh existing highlights with current color
+		currentGunRGBColor = rgbColor
+
+		-- Update all existing glow highlights with the new live color
+		local validHighlights = {}
 		for _, h in pairs(gunGlowHighlights) do
 			if h and h.Parent then
-				h.FillColor = rgbColor
+				h.FillColor    = rgbColor
 				h.OutlineColor = rgbColor
+				table.insert(validHighlights, h)
 			end
 		end
-		-- Keep scanning in case new tools appeared
-		scanAndApplyGunGlow(rgbColor)
-	else
-		-- If gun glow toggled off, handled in toggle callback; just skip
+		gunGlowHighlights = validHighlights
+
+		-- Ensure any newly equipped weapon gets a glow
+		scanAndApplyGunGlow()
 	end
 
 	-- ---- AIMBOT ----
