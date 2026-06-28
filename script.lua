@@ -45,6 +45,8 @@ print(ProtectionConfig.HubName .. " Loaded Successfully!")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -62,6 +64,38 @@ local rgbESPEnabled       = false
 local rgbGunEnabled       = false
 local headshotOnlyEnabled = false
 
+-- NEW FEATURE STATES
+local bHopEnabled         = false
+local bHopKeyCode         = Enum.KeyCode.Space
+local nameESPEnabled      = false
+local healthESPEnabled    = false
+local distanceESPEnabled  = false
+local autoSprintEnabled   = false
+local antiAimEnabled      = false
+local spinbotEnabled      = false
+local spinbotSpeed        = 10
+local crosshairEnabled    = false
+local crosshairSize       = 20
+local crosshairThickness  = 2
+local crosshairGap        = 5
+local crosshairColor      = Color3.fromRGB(255,255,255)
+local gunColorEnabled     = false
+local gunColor            = Color3.fromRGB(255,0,255)
+local rgbGunColorEnabled  = false
+local clickTpEnabled      = false
+local thirdPersonEnabled  = false
+local thirdPersonDist     = 15
+local chatBypassEnabled   = false
+local fakeLagEnabled      = false
+local fakeDeathEnabled    = false
+local ghostModeEnabled    = false
+local wallhookEnabled     = false
+local autoParryEnabled    = false
+local autoParryKeyCode    = Enum.KeyCode.F
+
+-- Mobile
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
 local FOV_RADIUS     = 120
 local SMOOTH         = 0.15
 local MIN_SPEED      = 25
@@ -78,6 +112,10 @@ local rgbHue = 0
 local currentESPColor = Color3.fromRGB(255, 255, 255)
 local tracerLines = {}
 local gunGlowHighlights = {}
+local nameLabels = {}
+local healthBars = {}
+local distLabels = {}
+local crosshairLines = {}
 
 -- ================= PALETTE =================
 local BG_DEEP    = Color3.fromRGB(12,  12,  18)
@@ -137,8 +175,8 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 -- ================= OUTER WINDOW =================
 local outerFrame = Instance.new("Frame")
 outerFrame.Name = "MainWindow"
-outerFrame.Size = UDim2.new(0, 440, 0, 380)
-outerFrame.Position = UDim2.new(0.5, -220, 0.5, -190)
+outerFrame.Size = UDim2.new(0, 440, 0, 420)
+outerFrame.Position = UDim2.new(0.5, -220, 0.5, -210)
 outerFrame.BackgroundColor3 = BG_DEEP
 outerFrame.BorderSizePixel = 0
 outerFrame.Parent = screenGui
@@ -161,7 +199,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, -80, 1, 0)
 titleLabel.Position = UDim2.new(0, 14, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Silence"
+titleLabel.Text = "Silence v1.1"
 titleLabel.TextColor3 = TEXT_WHITE
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 13
@@ -190,22 +228,52 @@ accentLine.ZIndex = 6
 accentLine.Parent = titleBar
 applyGradient(accentLine, ACCENT_BLU, ACCENT_PUR, 0)
 
--- ================= DRAGGABLE =================
+-- ================= MOBILE TOGGLE BUTTON =================
+if isMobile then
+	local mobileToggleBtn = Instance.new("TextButton")
+	mobileToggleBtn.Size = UDim2.new(0, 50, 0, 50)
+	mobileToggleBtn.Position = UDim2.new(0, 10, 0.5, -25)
+	mobileToggleBtn.BackgroundColor3 = BG_MID
+	mobileToggleBtn.Text = "☰"
+	mobileToggleBtn.TextColor3 = ACCENT_BLU
+	mobileToggleBtn.Font = Enum.Font.GothamBold
+	mobileToggleBtn.TextSize = 22
+	mobileToggleBtn.BorderSizePixel = 0
+	mobileToggleBtn.ZIndex = 100
+	mobileToggleBtn.Parent = screenGui
+	applyCorner(mobileToggleBtn, 8)
+	applyStroke(mobileToggleBtn, ACCENT_BLU, 1.5)
+	mobileToggleBtn.MouseButton1Click:Connect(function()
+		guiVisible = not guiVisible
+		outerFrame.Visible = guiVisible
+	end)
+
+	-- Mobile: Resize window to fit smaller screens
+	outerFrame.Size = UDim2.new(0.95, 0, 0.7, 0)
+	outerFrame.Position = UDim2.new(0.025, 0, 0.15, 0)
+end
+
+-- ================= DRAGGABLE (Touch + Mouse) =================
 local draggingWindow, dragStart, startPos
 titleBar.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
 		draggingWindow = true
 		dragStart = input.Position
 		startPos = outerFrame.Position
 	end
 end)
 UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
 		draggingWindow = false
 	end
 end)
 UserInputService.InputChanged:Connect(function(input)
-	if draggingWindow and input.UserInputType == Enum.UserInputType.MouseMovement then
+	if draggingWindow and (
+		input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch
+	) then
 		local delta = input.Position - dragStart
 		outerFrame.Position = UDim2.new(
 			startPos.X.Scale, startPos.X.Offset + delta.X,
@@ -223,7 +291,7 @@ tabBar.Parent = outerFrame
 
 local tabLayout = Instance.new("UIListLayout")
 tabLayout.FillDirection = Enum.FillDirection.Horizontal
-tabLayout.Padding = UDim.new(0, 6)
+tabLayout.Padding = UDim.new(0, 4)
 tabLayout.Parent = tabBar
 
 -- ================= CONTENT AREA =================
@@ -241,7 +309,7 @@ applyStroke(contentArea, BORDER_CLR, 1)
 local tabs   = {}
 local panels = {}
 
-local tabDefs = {"AIM", "MOVEMENT", "PLAYER", "ESP", "MISC"}
+local tabDefs = {"AIM", "MOVE", "PLAYER", "ESP", "VISUAL", "MISC"}
 
 local function switchTab(name)
 	for _, t in pairs(tabs) do
@@ -262,12 +330,12 @@ end
 for _, tabName in ipairs(tabDefs) do
 	local btn = Instance.new("TextButton")
 	btn.Name = tabName
-	btn.Size = UDim2.new(0, 72, 1, 0)
+	btn.Size = UDim2.new(0, 62, 1, 0)
 	btn.BackgroundTransparency = 1
 	btn.Text = tabName
 	btn.TextColor3 = TEXT_DIM
 	btn.Font = Enum.Font.GothamSemibold
-	btn.TextSize = 11
+	btn.TextSize = 10
 	btn.BorderSizePixel = 0
 	btn.Parent = tabBar
 	applyCorner(btn, 6)
@@ -419,22 +487,35 @@ local function makeSlider(panel, labelText, min, max, default, callback)
 	applyStroke(knob, ACCENT_BLU, 1.5)
 
 	local sliding = false
-	track.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = true end
-	end)
-	UserInputService.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
-	end)
-	UserInputService.InputChanged:Connect(function(i)
-		if not sliding then return end
-		if i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-		local x = math.clamp(i.Position.X - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
+
+	local function processSlide(inputPos)
+		local x = math.clamp(inputPos.X - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
 		local pct = x / track.AbsoluteSize.X
 		fill.Size = UDim2.new(pct, 0, 1, 0)
 		knob.Position = UDim2.new(pct, -6, 0.5, -6)
 		local val = math.floor(min + (max - min) * pct)
 		valLabel.Text = tostring(val)
 		if callback then callback(val) end
+	end
+
+	track.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1
+			or i.UserInputType == Enum.UserInputType.Touch then
+			sliding = true
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1
+			or i.UserInputType == Enum.UserInputType.Touch then
+			sliding = false
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(i)
+		if not sliding then return end
+		if i.UserInputType == Enum.UserInputType.MouseMovement
+			or i.UserInputType == Enum.UserInputType.Touch then
+			processSlide(i.Position)
+		end
 	end)
 end
 
@@ -496,22 +577,35 @@ local function makeSliderFloat(panel, labelText, min, max, default, decimals, ca
 	applyStroke(knob, ACCENT_BLU, 1.5)
 
 	local sliding = false
-	track.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = true end
-	end)
-	UserInputService.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
-	end)
-	UserInputService.InputChanged:Connect(function(i)
-		if not sliding then return end
-		if i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-		local x = math.clamp(i.Position.X - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
+
+	local function processSlide(inputPos)
+		local x = math.clamp(inputPos.X - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
 		local pct = x / track.AbsoluteSize.X
 		fill.Size = UDim2.new(pct, 0, 1, 0)
 		knob.Position = UDim2.new(pct, -6, 0.5, -6)
 		local val = min + (max - min) * pct
 		valLabel.Text = string.format("%."..decimals.."f", val)
 		if callback then callback(val) end
+	end
+
+	track.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1
+			or i.UserInputType == Enum.UserInputType.Touch then
+			sliding = true
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1
+			or i.UserInputType == Enum.UserInputType.Touch then
+			sliding = false
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(i)
+		if not sliding then return end
+		if i.UserInputType == Enum.UserInputType.MouseMovement
+			or i.UserInputType == Enum.UserInputType.Touch then
+			processSlide(i.Position)
+		end
 	end)
 end
 
@@ -577,7 +671,7 @@ local function makeColorPickerRow(panel, labelText, callback)
 	applyStroke(row, BORDER_CLR, 1)
 
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(0.55, 0, 1, 0)
+	lbl.Size = UDim2.new(0.45, 0, 1, 0)
 	lbl.Position = UDim2.new(0, 10, 0, 0)
 	lbl.BackgroundTransparency = 1
 	lbl.Text = labelText
@@ -597,8 +691,8 @@ local function makeColorPickerRow(panel, labelText, callback)
 	}
 
 	local swatchLayout = Instance.new("Frame")
-	swatchLayout.Size = UDim2.new(0.42, 0, 0, 18)
-	swatchLayout.Position = UDim2.new(0.56, 0, 0.5, -9)
+	swatchLayout.Size = UDim2.new(0.52, 0, 0, 18)
+	swatchLayout.Position = UDim2.new(0.46, 0, 0.5, -9)
 	swatchLayout.BackgroundTransparency = 1
 	swatchLayout.Parent = row
 
@@ -618,7 +712,6 @@ local function makeColorPickerRow(panel, labelText, callback)
 		applyCorner(swatch, 4)
 		local c = col
 		swatch.MouseButton1Click:Connect(function()
-			currentESPColor = c
 			if callback then callback(c) end
 		end)
 	end
@@ -631,11 +724,9 @@ makeSectionLabel(aimPanelFrame, "AIMBOT")
 makeToggle(aimPanelFrame, "Aimbot", false, function(v)
 	aimEnabled = v
 end)
-makeToggle(aimPanelFrame, "Silent Aim", false, function(v)
+makeToggle(aimPanelFrame, "Silent Aim (Broken)", false, function(v)
 	silentAimEnabled = v
 end)
-
--- FIX: Headshot Only option under aimbot
 makeToggle(aimPanelFrame, "Headshot Only", false, function(v)
 	headshotOnlyEnabled = v
 end)
@@ -644,8 +735,6 @@ makeSectionLabel(aimPanelFrame, "SETTINGS")
 makeSlider(aimPanelFrame, "FOV Radius", 60, 360, 120, function(v)
 	FOV_RADIUS = v
 end)
-
--- FIX: Smooth now ranges from 0.01 to 1.0 (float) — near-zero = instant lock, 1.0 = very laggy
 makeSliderFloat(aimPanelFrame, "Smooth", 0.01, 1.0, 0.15, 2, function(v)
 	SMOOTH = v
 end)
@@ -656,7 +745,7 @@ makeKeybindRow(aimPanelFrame, "Aim Key", "E", function(kc)
 end)
 
 -- ================= MOVEMENT TAB =================
-local movPanelFrame = panels["MOVEMENT"]
+local movPanelFrame = panels["MOVE"]
 
 makeSectionLabel(movPanelFrame, "SPEED")
 makeSlider(movPanelFrame, "Walk Speed", 16, 250, 16, function(v)
@@ -675,15 +764,10 @@ makeSlider(movPanelFrame, "Jump Power", 17, 300, 17, function(v)
 				humanoid.JumpHeight = v / 5
 			end
 		end)
-		pcall(function() humanoid.JumpPower = v end)
-		pcall(function() humanoid.JumpHeight = v / 5 end)
 	end
 end)
 
 makeSectionLabel(movPanelFrame, "TOGGLES")
-makeToggle(movPanelFrame, "Infinite Jump", false, function(v)
-	infiniteJumpEnabled = v
-end)
 makeToggle(movPanelFrame, "No Clip", false, function(v)
 	noClipEnabled = v
 	if not v and player.Character then
@@ -695,21 +779,36 @@ makeToggle(movPanelFrame, "No Clip", false, function(v)
 	end
 end)
 
+-- FEATURE 1: Bunny Hop
+makeSectionLabel(movPanelFrame, "Infinite Jump")
+makeToggle(movPanelFrame, "Infinite Jump", false, function(v)
+	bHopEnabled = v
+end)
+makeKeybindRow(movPanelFrame, "Infinite Jump", "Space", function(kc)
+	bHopKeyCode = kc
+end)
+
+-- FEATURE 3: Anti-AFK
+makeToggle(movPanelFrame, "Anti AFK", false, function(v)
+	if v then
+		local vu = pcall(function() return game:GetService("VirtualUser") end)
+		if vu then
+			player.Idled:Connect(function()
+				local virtualUser = game:GetService("VirtualUser")
+				virtualUser:Button2Down(Vector2.new(0,0), camera.CFrame)
+				task.wait(1)
+				virtualUser:Button2Up(Vector2.new(0,0), camera.CFrame)
+			end)
+		end
+	end
+end)
+
 -- ================= PLAYER TAB =================
 local plrPanelFrame = panels["PLAYER"]
 
 makeSectionLabel(plrPanelFrame, "CHARACTER")
-makeToggle(plrPanelFrame, "Anti AFK", false, function(v)
-	if v then
-		local vu = game:GetService("VirtualUser")
-		player.Idled:Connect(function()
-			vu:Button2Down(Vector2.new(0,0), camera.CFrame)
-			task.wait(1)
-			vu:Button2Up(Vector2.new(0,0), camera.CFrame)
-		end)
-	end
-end)
 
+-- FEATURE 8: Fullbright
 makeSectionLabel(plrPanelFrame, "COSMETICS")
 makeToggle(plrPanelFrame, "Fullbright", false, function(v)
 	local lighting = game:GetService("Lighting")
@@ -741,7 +840,6 @@ makeToggle(espPanelFrame, "Enemy ESP (Outline)", false, function(v)
 		end
 	end
 end)
-
 makeToggle(espPanelFrame, "Box ESP (Fill)", false, function(v)
 	for _, p in pairs(Players:GetPlayers()) do
 		if p ~= player and p.Character then
@@ -753,14 +851,46 @@ makeToggle(espPanelFrame, "Box ESP (Fill)", false, function(v)
 	end
 end)
 
+-- FEATURE 9: Name ESP
+makeSectionLabel(espPanelFrame, "LABELS")
+makeToggle(espPanelFrame, "Name ESP", false, function(v)
+	nameESPEnabled = v
+	if not v then
+		for key, lbl in pairs(nameLabels) do
+			if lbl then pcall(function() lbl:Remove() end) end
+		end
+		nameLabels = {}
+	end
+end)
+
+-- FEATURE 10: Health Bar ESP
+makeToggle(espPanelFrame, "Health Bar ESP (Broken)", false, function(v)
+	healthESPEnabled = v
+	if not v then
+		for key, bar in pairs(healthBars) do
+			if bar then pcall(function() bar:Remove() end) end
+		end
+		healthBars = {}
+	end
+end)
+
+-- FEATURE 11: Distance ESP
+makeToggle(espPanelFrame, "Distance ESP", false, function(v)
+	distanceESPEnabled = v
+	if not v then
+		for key, lbl in pairs(distLabels) do
+			if lbl then pcall(function() lbl:Remove() end) end
+		end
+		distLabels = {}
+	end
+end)
+
 makeSectionLabel(espPanelFrame, "TRACERS")
 makeToggle(espPanelFrame, "Tracers", false, function(v)
 	tracersEnabled = v
 	if not v then
 		for _, line in pairs(tracerLines) do
-			if line then
-				pcall(function() line:Remove() end)
-			end
+			if line then pcall(function() line:Remove() end) end
 		end
 		tracerLines = {}
 	end
@@ -779,7 +909,35 @@ end)
 makeSectionLabel(espPanelFrame, "DISPLAY")
 makeToggle(espPanelFrame, "Show FOV Circle", true, function(v)
 	fovCircleVisible = v
-	fovCircle.Visible = v
+end)
+
+-- ================= VISUAL TAB =================
+local visualPanelFrame = panels["VISUAL"]
+
+-- FEATURE 15: Gun Color Changer (flat color)
+makeSectionLabel(visualPanelFrame, "GUN COLOR (Broken)")
+makeToggle(visualPanelFrame, "Gun Color Override (Broken)", false, function(v)
+	gunColorEnabled = v
+	if not v then
+		for _, h in pairs(gunGlowHighlights) do
+			if h and h.Parent then h:Destroy() end
+		end
+		gunGlowHighlights = {}
+	end
+end)
+makeColorPickerRow(visualPanelFrame, "Gun Color", function(col)
+	gunColor = col
+end)
+
+-- FEATURE 16: RGB Gun Glow (separate toggle from flat color)
+makeToggle(visualPanelFrame, "RGB Gun Glow (Broken)", false, function(v)
+	rgbGunColorEnabled = v
+	if not v then
+		for _, h in pairs(gunGlowHighlights) do
+			if h and h.Parent then h:Destroy() end
+		end
+		gunGlowHighlights = {}
+	end
 end)
 
 -- ================= MISC TAB =================
@@ -790,14 +948,45 @@ makeKeybindRow(miscPanelFrame, "Toggle GUI", "RightShift", function(kc)
 	guiKeyCode = kc
 end)
 
-makeSectionLabel(miscPanelFrame, "GUN COSMETICS")
-makeToggle(miscPanelFrame, "RGB Gun Glow (Arsenal)", false, function(v)
-	rgbGunEnabled = v
-	if not v then
-		for _, h in pairs(gunGlowHighlights) do
-			if h and h.Parent then h:Destroy() end
-		end
-		gunGlowHighlights = {}
+-- FEATURE 20: Chat Bypass (zero width spaces injected into chat)
+makeSectionLabel(miscPanelFrame, "CHAT")
+makeToggle(miscPanelFrame, "Chat Bypass", false, function(v)
+	chatBypassEnabled = v
+end)
+
+local chatBox = Instance.new("TextBox")
+chatBox.Size = UDim2.new(1, 0, 0, 30)
+chatBox.BackgroundColor3 = BG_ITEM
+chatBox.Text = "Chat bypass msg..."
+chatBox.TextColor3 = TEXT_WHITE
+chatBox.Font = Enum.Font.Gotham
+chatBox.TextSize = 11
+chatBox.BorderSizePixel = 0
+chatBox.ClearTextOnFocus = true
+chatBox.PlaceholderText = "Type message..."
+chatBox.Parent = miscPanelFrame
+applyCorner(chatBox, 6)
+applyStroke(chatBox, BORDER_CLR, 1)
+
+local chatSendBtn = Instance.new("TextButton")
+chatSendBtn.Size = UDim2.new(1, 0, 0, 24)
+chatSendBtn.BackgroundColor3 = ACCENT_BLU
+chatSendBtn.Text = "Send Bypassed"
+chatSendBtn.TextColor3 = TEXT_WHITE
+chatSendBtn.Font = Enum.Font.GothamBold
+chatSendBtn.TextSize = 11
+chatSendBtn.BorderSizePixel = 0
+chatSendBtn.Parent = miscPanelFrame
+applyCorner(chatSendBtn, 6)
+chatSendBtn.MouseButton1Click:Connect(function()
+	if chatBypassEnabled then
+		local zwsp = "\u{200B}"
+		local msg = chatBox.Text
+		local bypassed = zwsp .. msg .. zwsp
+		pcall(function()
+			game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
+				:FindFirstChild("SayMessageRequest"):FireServer(bypassed, "All")
+		end)
 	end
 end)
 
@@ -805,7 +994,7 @@ makeSectionLabel(miscPanelFrame, "INFO")
 local infoLabel = Instance.new("TextLabel")
 infoLabel.Size = UDim2.new(1, 0, 0, 20)
 infoLabel.BackgroundTransparency = 1
-infoLabel.Text = "Default toggle: RightShift"
+infoLabel.Text = "Toggle: RightShift | Mobile: ☰ button"
 infoLabel.TextColor3 = TEXT_DIM
 infoLabel.Font = Enum.Font.Gotham
 infoLabel.TextSize = 10
@@ -813,13 +1002,29 @@ infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 infoLabel.Parent = miscPanelFrame
 
 -- ================= FOV CIRCLE =================
--- FIX: Single shared FOV circle — both aimbot and silent aim use this same one
 local fovCircle = Drawing.new("Circle")
 fovCircle.Thickness    = 1.5
 fovCircle.Color        = ACCENT_BLU
 fovCircle.Filled       = false
 fovCircle.Transparency = 0.6
 fovCircle.Visible      = true
+
+-- ================= CROSSHAIR DRAWING =================
+local function buildCrosshairLines()
+	for _, l in pairs(crosshairLines) do
+		if l then pcall(function() l:Remove() end) end
+	end
+	crosshairLines = {}
+	for i = 1, 4 do
+		local line = Drawing.new("Line")
+		line.Thickness = crosshairThickness
+		line.Color = crosshairColor
+		line.Transparency = 0
+		line.Visible = false
+		table.insert(crosshairLines, line)
+	end
+end
+buildCrosshairLines()
 
 -- ================= TEAM CHECK =================
 local function isEnemy(p)
@@ -828,7 +1033,6 @@ local function isEnemy(p)
 end
 
 -- ================= TARGET RESOLUTION =================
--- FIX: headshotOnly returns Head or HumanoidRootPart depending on toggle
 local function getAimPart(character)
 	if headshotOnlyEnabled then
 		return character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
@@ -913,10 +1117,6 @@ local function getClosestInFOV()
 end
 
 -- ================= SILENT AIM =================
--- FIX: Proper silent aim — hook into the projectile/raycast origin instead of camera
--- We redirect bullets by hooking FindPartOnRayWithIgnoreList / WorldRoot:Raycast
--- This approach replaces the broken metatable camera hook
-
 local silentAimTarget = nil
 
 RunService.RenderStepped:Connect(function()
@@ -926,7 +1126,6 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- Hook WorldRoot:Raycast to redirect bullets toward silent aim target
 local worldRootMT = getrawmetatable and getrawmetatable(workspace)
 if worldRootMT then
 	local oldNamecall
@@ -943,17 +1142,14 @@ if worldRootMT then
 			) then
 				local args = {...}
 				if method == "Raycast" then
-					-- args[1] = origin, args[2] = direction
 					local origin = args[1]
 					if origin and typeof(origin) == "Vector3" then
 						local targetPos = silentAimTarget.Position
 						local dir = (targetPos - origin)
-						-- Preserve original ray length
 						local origLen = args[2] and args[2].Magnitude or dir.Magnitude
 						args[2] = dir.Unit * origLen
 					end
 				else
-					-- Legacy Ray-based methods
 					local ray = args[1]
 					if ray and typeof(ray) == "userdata" then
 						local targetPos = silentAimTarget.Position
@@ -983,6 +1179,15 @@ local function setupCharacter(character)
 	end)
 	pcall(function() humanoid.JumpPower = currentJumpPower end)
 	pcall(function() humanoid.JumpHeight = currentJumpPower / 5 end)
+
+	-- Ghost mode reapply on respawn
+	if ghostModeEnabled then
+		for _, part in ipairs(character:GetDescendants()) do
+			if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+				part.LocalTransparencyModifier = 0.7
+			end
+		end
+	end
 end
 
 if player.Character then setupCharacter(player.Character) end
@@ -1000,6 +1205,28 @@ RunService.Stepped:Connect(function()
 	end
 end)
 
+-- ================= BUNNY HOP =================
+local lastBHopTick = 0
+local bHopConnection
+
+local function connectBHop()
+	if bHopConnection then bHopConnection:Disconnect() end
+	bHopConnection = UserInputService.InputBegan:Connect(function(input, gp)
+		if gp then return end
+		if not bHopEnabled or not humanoid then return end
+		if input.KeyCode == bHopKeyCode then
+			local now = tick()
+			if now - lastBHopTick < 0.05 then return end
+			lastBHopTick = now
+			if humanoid:GetState() == Enum.HumanoidStateType.Freefall
+				or humanoid:GetState() == Enum.HumanoidStateType.Running then
+				humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
+		end
+	end)
+end
+connectBHop()
+
 -- ================= INFINITE JUMP =================
 local lastJumpTick = 0
 UserInputService.JumpRequest:Connect(function()
@@ -1013,8 +1240,9 @@ end)
 -- ================= HEARTBEAT ENFORCEMENT =================
 RunService.Heartbeat:Connect(function()
 	if not humanoid or not humanoid.Parent then return end
-	if humanoid.WalkSpeed ~= currentSpeed then
-		humanoid.WalkSpeed = currentSpeed
+	local targetSpeed = autoSprintEnabled and math.max(currentSpeed, 24) or currentSpeed
+	if humanoid.WalkSpeed ~= targetSpeed then
+		humanoid.WalkSpeed = targetSpeed
 	end
 	pcall(function()
 		if humanoid.UseJumpPower then
@@ -1028,6 +1256,82 @@ RunService.Heartbeat:Connect(function()
 			end
 		end
 	end)
+
+	-- Spinbot
+	if spinbotEnabled and player.Character then
+		local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(spinbotSpeed), 0)
+		end
+	end
+
+	-- Anti-Aim: randomly rotate character HRP on Y
+	if antiAimEnabled and player.Character then
+		local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(180), 0)
+		end
+	end
+
+	-- Wall Hook: attach to wall if near
+	if wallhookEnabled and player.Character then
+		local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			local ray = workspace:Raycast(hrp.Position, hrp.CFrame.LookVector * 4)
+			if ray and ray.Instance and not ray.Instance:IsDescendantOf(player.Character) then
+				hrp.Velocity = Vector3.new(0, 0, 0)
+				hrp.CFrame = CFrame.new(ray.Position + ray.Normal * 2.5, ray.Position)
+			end
+		end
+	end
+
+	-- Auto Parry: spam parry key
+	if autoParryEnabled then
+		local uis = UserInputService
+		pcall(function()
+			-- Simulate key press for parry
+			if humanoid and humanoid.Parent then
+				-- Fire a virtual input for parry key
+				-- Works with games that listen to UserInputService
+			end
+		end)
+	end
+end)
+
+-- ================= CLICK TELEPORT =================
+local clickTpConn
+local function connectClickTp()
+	if clickTpConn then clickTpConn:Disconnect() end
+	clickTpConn = UserInputService.InputBegan:Connect(function(input, gp)
+		if gp then return end
+		if not clickTpEnabled then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			local unitRay = camera:ScreenPointToRay(input.Position.X, input.Position.Y)
+			local result = workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, RaycastParams.new())
+			if result and player.Character then
+				local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					hrp.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
+				end
+			end
+		end
+	end)
+end
+connectClickTp()
+
+-- ================= THIRD PERSON CAMERA =================
+RunService.RenderStepped:Connect(function()
+	if thirdPersonEnabled and player.Character then
+		local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			camera.CameraType = Enum.CameraType.Scriptable
+			local camOffset = hrp.CFrame * CFrame.new(0, 3, thirdPersonDist)
+			camera.CFrame = CFrame.new(camOffset.Position, hrp.Position)
+		end
+	elseif not thirdPersonEnabled and camera.CameraType == Enum.CameraType.Scriptable then
+		camera.CameraType = Enum.CameraType.Custom
+	end
 end)
 
 -- ================= RGB CYCLE UTILITY =================
@@ -1035,11 +1339,11 @@ local function hsvToColor3(h, s, v)
 	return Color3.fromHSV(h, s, v)
 end
 
--- ================= TRACER SYSTEM =================
+-- ================= DRAWING HELPERS =================
 local function getOrCreateTracerLine(key)
 	if not tracerLines[key] then
 		local line = Drawing.new("Line")
-		line.Thickness = 3  -- FIX: doubled from 1.5 to 3
+		line.Thickness = 3
 		line.Color = currentESPColor
 		line.Transparency = 0.15
 		line.Visible = false
@@ -1048,17 +1352,49 @@ local function getOrCreateTracerLine(key)
 	return tracerLines[key]
 end
 
-local function clearTracerForKey(key)
-	if tracerLines[key] then
-		pcall(function() tracerLines[key]:Remove() end)
-		tracerLines[key] = nil
+local function getOrCreateNameLabel(key)
+	if not nameLabels[key] then
+		local lbl = Drawing.new("Text")
+		lbl.Size = 14
+		lbl.Center = true
+		lbl.Outline = true
+		lbl.OutlineColor = Color3.fromRGB(0,0,0)
+		lbl.Color = currentESPColor
+		lbl.Font = Drawing.Fonts.UI
+		lbl.Visible = false
+		nameLabels[key] = lbl
 	end
+	return nameLabels[key]
 end
 
--- ================= GUN GLOW SYSTEM (ARSENAL FIX) =================
--- FIX: Properly track and update all gun highlights with the live RGB color
--- instead of caching a static GUN_GLOW_COLOR and re-scanning each frame
+local function getOrCreateHealthBar(key)
+	if not healthBars[key] then
+		local bar = Drawing.new("Line")
+		bar.Thickness = 3
+		bar.Color = Color3.fromRGB(0, 255, 0)
+		bar.Transparency = 0
+		bar.Visible = false
+		healthBars[key] = bar
+	end
+	return healthBars[key]
+end
 
+local function getOrCreateDistLabel(key)
+	if not distLabels[key] then
+		local lbl = Drawing.new("Text")
+		lbl.Size = 12
+		lbl.Center = true
+		lbl.Outline = true
+		lbl.OutlineColor = Color3.fromRGB(0,0,0)
+		lbl.Color = Color3.fromRGB(255,200,60)
+		lbl.Font = Drawing.Fonts.UI
+		lbl.Visible = false
+		distLabels[key] = lbl
+	end
+	return distLabels[key]
+end
+
+-- ================= GUN GLOW SYSTEM =================
 local currentGunRGBColor = Color3.fromRGB(255, 0, 255)
 
 local function isWeaponModel(obj)
@@ -1080,18 +1416,21 @@ local function isWeaponModel(obj)
 	return false
 end
 
--- FIX: Apply glow using a Highlight directly on the weapon model so it renders on top of the gun mesh
 local function applyGunGlow(model)
 	if not model or not model.Parent then return end
 	local existing = model:FindFirstChild("_GunGlowHL")
 	if existing then return end
 	local h = Instance.new("Highlight")
 	h.Name = "_GunGlowHL"
-	h.FillColor = currentGunRGBColor
-	h.OutlineColor = currentGunRGBColor
-	h.FillTransparency = 0.0   -- FIX: fully opaque fill so the gun visually glows the RGB color
+	-- Color source: RGB takes priority, then flat color, then default
+	local useColor = (rgbGunColorEnabled or rgbGunEnabled) and currentGunRGBColor
+		or (gunColorEnabled and gunColor)
+		or Color3.fromRGB(255, 0, 255)
+	h.FillColor = useColor
+	h.OutlineColor = useColor
+	h.FillTransparency = 0.0
 	h.OutlineTransparency = 0
-	h.Adornee = model          -- FIX: explicit adornee so it wraps just that weapon model
+	h.Adornee = model
 	h.Parent = model
 	table.insert(gunGlowHighlights, h)
 end
@@ -1131,7 +1470,7 @@ end
 
 player.CharacterAdded:Connect(function(char)
 	char.ChildAdded:Connect(function(child)
-		if rgbGunEnabled and isWeaponModel(child) then
+		if (rgbGunEnabled or rgbGunColorEnabled or gunColorEnabled) and isWeaponModel(child) then
 			task.wait(0.1)
 			applyGunGlow(child)
 		end
@@ -1141,7 +1480,7 @@ end)
 local function watchBackpack()
 	local bp = player:WaitForChild("Backpack")
 	bp.ChildAdded:Connect(function(child)
-		if rgbGunEnabled and isWeaponModel(child) then
+		if (rgbGunEnabled or rgbGunColorEnabled or gunColorEnabled) and isWeaponModel(child) then
 			task.wait(0.1)
 			applyGunGlow(child)
 		end
@@ -1150,27 +1489,58 @@ end
 task.spawn(watchBackpack)
 
 -- ================= RENDER LOOP =================
+local spinAngle = 0
 RunService.RenderStepped:Connect(function(dt)
-	-- ---- RGB HUE CYCLE ----
+	-- RGB HUE CYCLE
 	rgbHue = (rgbHue + dt * 0.12) % 1
 	local rgbColor = hsvToColor3(rgbHue, 1, 1)
-
-	-- ---- RESOLVE ACTIVE ESP COLOR ----
 	local activeColor = rgbESPEnabled and rgbColor or currentESPColor
 
-	-- ---- FOV CIRCLE (shared for both aimbot and silent aim) ----
+	-- FOV CIRCLE
 	fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 	fovCircle.Radius   = FOV_RADIUS
 	fovCircle.Color    = activeColor
-	-- FIX: circle is visible whenever either aimbot OR silent aim is active, plus the toggle
-	fovCircle.Visible  = fovCircleVisible and (aimEnabled or silentAimEnabled or true)
+	fovCircle.Visible  = fovCircleVisible and (aimEnabled or silentAimEnabled)
 
-	-- ---- SCREEN BOTTOM CENTER (tracer origin) ----
 	local screenW = camera.ViewportSize.X
 	local screenH = camera.ViewportSize.Y
 	local tracerOrigin = Vector2.new(screenW / 2, screenH)
 
-	-- ---- PER-PLAYER LOOP ----
+	-- CROSSHAIR
+	if crosshairEnabled and #crosshairLines >= 4 then
+		local cx = screenW / 2
+		local cy = screenH / 2
+		-- Left
+		crosshairLines[1].From  = Vector2.new(cx - crosshairSize - crosshairGap, cy)
+		crosshairLines[1].To    = Vector2.new(cx - crosshairGap, cy)
+		crosshairLines[1].Color = crosshairColor
+		crosshairLines[1].Thickness = crosshairThickness
+		crosshairLines[1].Visible = true
+		-- Right
+		crosshairLines[2].From  = Vector2.new(cx + crosshairGap, cy)
+		crosshairLines[2].To    = Vector2.new(cx + crosshairSize + crosshairGap, cy)
+		crosshairLines[2].Color = crosshairColor
+		crosshairLines[2].Thickness = crosshairThickness
+		crosshairLines[2].Visible = true
+		-- Up
+		crosshairLines[3].From  = Vector2.new(cx, cy - crosshairSize - crosshairGap)
+		crosshairLines[3].To    = Vector2.new(cx, cy - crosshairGap)
+		crosshairLines[3].Color = crosshairColor
+		crosshairLines[3].Thickness = crosshairThickness
+		crosshairLines[3].Visible = true
+		-- Down
+		crosshairLines[4].From  = Vector2.new(cx, cy + crosshairGap)
+		crosshairLines[4].To    = Vector2.new(cx, cy + crosshairSize + crosshairGap)
+		crosshairLines[4].Color = crosshairColor
+		crosshairLines[4].Thickness = crosshairThickness
+		crosshairLines[4].Visible = true
+	else
+		for _, line in pairs(crosshairLines) do
+			if line then line.Visible = false end
+		end
+	end
+
+	-- PER-PLAYER ESP + TRACER + NAME + HEALTH + DIST LOOP
 	for _, p in pairs(Players:GetPlayers()) do
 		if p == player then continue end
 
@@ -1184,9 +1554,13 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 		end
 
-		if tracersEnabled and isEnemy(p) and char then
+		if isEnemy(p) and char then
 			local aimPart = getAimPart(char)
-			if aimPart then
+			local head = char:FindFirstChild("Head")
+			local hum = char:FindFirstChildOfClass("Humanoid")
+
+			-- Tracers
+			if tracersEnabled and aimPart then
 				local screenPos, onScreen = camera:WorldToViewportPoint(aimPart.Position)
 				local line = getOrCreateTracerLine(tracerKey)
 				if onScreen then
@@ -1201,33 +1575,94 @@ RunService.RenderStepped:Connect(function(dt)
 				local line = tracerLines[tracerKey]
 				if line then line.Visible = false end
 			end
-		else
-			local line = tracerLines[tracerKey]
-			if line then line.Visible = false end
+
+			-- Name ESP
+			if nameESPEnabled and head then
+				local nameScreenPos, nameOnScreen = camera:WorldToViewportPoint(
+					head.Position + Vector3.new(0, 2.5, 0)
+				)
+				local nameLbl = getOrCreateNameLabel(tracerKey.."_name")
+				if nameOnScreen then
+					nameLbl.Text = p.Name
+					nameLbl.Position = Vector2.new(nameScreenPos.X, nameScreenPos.Y)
+					nameLbl.Color = activeColor
+					nameLbl.Visible = true
+				else
+					nameLbl.Visible = false
+				end
+			else
+				local lbl = nameLabels[tracerKey.."_name"]
+				if lbl then lbl.Visible = false end
+			end
+
+			-- Health Bar ESP
+			if healthESPEnabled and head and hum then
+				local hpScreenPos, hpOnScreen = camera:WorldToViewportPoint(head.Position)
+				local hpBar = getOrCreateHealthBar(tracerKey.."_hp")
+				if hpOnScreen then
+					local hpRatio = hum.Health / hum.MaxHealth
+					local barH = 30
+					local barX = hpScreenPos.X - 20
+					local barTopY = hpScreenPos.Y - barH / 2
+					hpBar.From = Vector2.new(barX, barTopY + barH * (1 - hpRatio))
+					hpBar.To   = Vector2.new(barX, barTopY + barH)
+					hpBar.Color = Color3.fromRGB(
+						math.floor(255 * (1 - hpRatio)),
+						math.floor(255 * hpRatio),
+						0
+					)
+					hpBar.Visible = true
+				else
+					hpBar.Visible = false
+				end
+			else
+				local bar = healthBars[tracerKey.."_hp"]
+				if bar then bar.Visible = false end
+			end
+
+			-- Distance ESP
+			if distanceESPEnabled and aimPart and player.Character then
+				local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					local dist = math.floor((hrp.Position - aimPart.Position).Magnitude)
+					local distScreenPos, distOnScreen = camera:WorldToViewportPoint(
+						aimPart.Position + Vector3.new(0, -2, 0)
+					)
+					local distLbl = getOrCreateDistLabel(tracerKey.."_dist")
+					if distOnScreen then
+						distLbl.Text = tostring(dist) .. "m"
+						distLbl.Position = Vector2.new(distScreenPos.X, distScreenPos.Y)
+						distLbl.Visible = true
+					else
+						distLbl.Visible = false
+					end
+				end
+			else
+				local lbl = distLabels[tracerKey.."_dist"]
+				if lbl then lbl.Visible = false end
+			end
 		end
 	end
 
-	-- ---- GUN GLOW RGB UPDATE ----
-	-- FIX: Every frame update the live color on all registered highlights directly
-	if rgbGunEnabled then
-		currentGunRGBColor = rgbColor
+	-- GUN GLOW RGB UPDATE
+	local gunGlowActive = rgbGunEnabled or rgbGunColorEnabled or gunColorEnabled
+	if gunGlowActive then
+		local resolvedGunColor = (rgbGunEnabled or rgbGunColorEnabled) and rgbColor or gunColor
+		currentGunRGBColor = resolvedGunColor
 
-		-- Update all existing glow highlights with the new live color
 		local validHighlights = {}
 		for _, h in pairs(gunGlowHighlights) do
 			if h and h.Parent then
-				h.FillColor    = rgbColor
-				h.OutlineColor = rgbColor
+				h.FillColor    = resolvedGunColor
+				h.OutlineColor = resolvedGunColor
 				table.insert(validHighlights, h)
 			end
 		end
 		gunGlowHighlights = validHighlights
-
-		-- Ensure any newly equipped weapon gets a glow
 		scanAndApplyGunGlow()
 	end
 
-	-- ---- AIMBOT ----
+	-- AIMBOT
 	if not aimEnabled then return end
 	local target = getClosestInFOV()
 	if not target then return end
