@@ -948,59 +948,6 @@ makeKeybindRow(miscPanelFrame, "Toggle GUI", "RightShift", function(kc)
 	guiKeyCode = kc
 end)
 
--- FEATURE 20: Chat Bypass (zero width spaces injected into chat)
-makeSectionLabel(miscPanelFrame, "CHAT")
-makeToggle(miscPanelFrame, "Chat Bypass", false, function(v)
-	chatBypassEnabled = v
-end)
-
-local chatBox = Instance.new("TextBox")
-chatBox.Size = UDim2.new(1, 0, 0, 30)
-chatBox.BackgroundColor3 = BG_ITEM
-chatBox.Text = "Chat bypass msg..."
-chatBox.TextColor3 = TEXT_WHITE
-chatBox.Font = Enum.Font.Gotham
-chatBox.TextSize = 11
-chatBox.BorderSizePixel = 0
-chatBox.ClearTextOnFocus = true
-chatBox.PlaceholderText = "Type message..."
-chatBox.Parent = miscPanelFrame
-applyCorner(chatBox, 6)
-applyStroke(chatBox, BORDER_CLR, 1)
-
-local chatSendBtn = Instance.new("TextButton")
-chatSendBtn.Size = UDim2.new(1, 0, 0, 24)
-chatSendBtn.BackgroundColor3 = ACCENT_BLU
-chatSendBtn.Text = "Send Bypassed"
-chatSendBtn.TextColor3 = TEXT_WHITE
-chatSendBtn.Font = Enum.Font.GothamBold
-chatSendBtn.TextSize = 11
-chatSendBtn.BorderSizePixel = 0
-chatSendBtn.Parent = miscPanelFrame
-applyCorner(chatSendBtn, 6)
-chatSendBtn.MouseButton1Click:Connect(function()
-	if chatBypassEnabled then
-		local zwsp = "\u{200B}"
-		local msg = chatBox.Text
-		local bypassed = zwsp .. msg .. zwsp
-		pcall(function()
-			game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
-				:FindFirstChild("SayMessageRequest"):FireServer(bypassed, "All")
-		end)
-	end
-end)
-
-makeSectionLabel(miscPanelFrame, "INFO")
-local infoLabel = Instance.new("TextLabel")
-infoLabel.Size = UDim2.new(1, 0, 0, 20)
-infoLabel.BackgroundTransparency = 1
-infoLabel.Text = "Toggle: RightShift | Mobile: ☰ button"
-infoLabel.TextColor3 = TEXT_DIM
-infoLabel.Font = Enum.Font.Gotham
-infoLabel.TextSize = 10
-infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-infoLabel.Parent = miscPanelFrame
-
 -- ================= FOV CIRCLE =================
 local fovCircle = Drawing.new("Circle")
 fovCircle.Thickness    = 1.5
